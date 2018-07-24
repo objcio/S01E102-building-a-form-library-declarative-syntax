@@ -11,6 +11,7 @@ import UIKit
 struct Hotspot {
     var isEnabled: Bool = true
     var password: String = "hello"
+    var date: Date = Date()
 }
 
 extension Hotspot {
@@ -26,8 +27,12 @@ let hotspotForm: Form<Hotspot> =
         ], footer: \.enabledSectionTitle),
         section([
             detailTextCell(title: "Password", keyPath: \.password, form: buildPasswordForm)
+        ]),
+        section([
+            modalDetailCell(title: "Date", keyPath: \.date.description, element: datePicker(keyPath: \.date))
         ])
     ])
+
 
 let buildPasswordForm: Form<Hotspot> =
     sections([section([controlCell(title: "Password", control: textField(keyPath: \.password), leftAligned: true)])])

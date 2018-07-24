@@ -88,8 +88,53 @@ class FormViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         cell(for: indexPath).didSelect?()
+        tableView.deselectRow(at: indexPath, animated: true)
     }
     
+}
+
+class KeyboardLikeViewController: UIViewController {
+    var contentView: UIView = UIView()
+    
+    init(view: UIView) {
+        super.init(nibName: nil, bundle: nil)
+        self.contentView = view
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        
+        let toolbar = UIToolbar()
+        toolbar.items = [UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(done(_:)))]
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        
+        let stack = UIStackView(arrangedSubviews: [
+            toolbar,
+            contentView
+        ])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .vertical
+        view.addSubview(stack)
+        contentView.backgroundColor = .white
+        view.addConstraints([
+            view.bottomAnchor.constraint(equalTo: stack.bottomAnchor),
+            view.leftAnchor.constraint(equalTo: stack.leftAnchor),
+            view.rightAnchor.constraint(equalTo: stack.rightAnchor)
+        ])
+    }
+    
+    @objc func done(_ sender: UIBarButtonItem) {
+        dismiss(animated: true)
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+    }
 }
 
 class FormDriver<State> {
@@ -108,7 +153,11 @@ class FormDriver<State> {
         let context = RenderingContext(state: state, change: { [unowned self] f in
             f(&self.state)
         }, pushViewController: { [unowned self] vc in
+            if vc.modalPresentationStyle == .none {
                 self.formViewController.navigationController?.pushViewController(vc, animated: true)
+            } else {
+                self.formViewController.navigationController?.present(vc, animated: true)
+            }
         }, popViewController: {
                 self.formViewController.navigationController?.popViewController(animated: true)
         })
@@ -175,6 +224,20 @@ func textField<State>(keyPath: WritableKeyPath<State, String>) -> Rendered<State
     }
 }
 
+func datePicker<State>(keyPath: WritableKeyPath<State, Date>) -> Rendered<State, UIView> {
+    return { context in
+        let picker = UIDatePicker()
+        picker.translatesAutoresizingMaskIntoConstraints = false
+        let valueChanged = TargetAction {
+            context.change { $0[keyPath: keyPath] = picker.date }
+        }
+        picker.addTarget(valueChanged, action: #selector(TargetAction.action(_:)), for: .valueChanged)
+        return RenderedElement(element: picker, strongReferences: [valueChanged], update: { state in
+            picker.date = state[keyPath: keyPath]
+        })
+    }
+}
+
 func controlCell<State>(title: String, control: @escaping Rendered<State, UIView>, leftAligned: Bool = false) -> Rendered<State, FormCell> {
     return { context in
         let cell = FormCell(style: .value1, reuseIdentifier: nil)
@@ -201,6 +264,25 @@ func detailTextCell<State>(title: String, keyPath: KeyPath<State, String>, form:
         cell.shouldHighlight = true
         let rendered = form(context)
         let nested = FormViewController(sections: rendered.element, title: title)
+        cell.didSelect = {
+            context.pushViewController(nested)
+        }
+        return RenderedElement(element: cell, strongReferences: rendered.strongReferences, update: { state in
+            cell.detailTextLabel?.text = state[keyPath: keyPath]
+            rendered.update(state)
+        })
+    }
+}
+
+func modalDetailCell<State>(title: String, keyPath: KeyPath<State, String>, element: @escaping Rendered<State, UIView>) -> Rendered<State, FormCell> {
+    return { context in
+        let cell = FormCell(style: .value1, reuseIdentifier: nil)
+        cell.textLabel?.text = title
+        cell.accessoryType = .disclosureIndicator
+        cell.shouldHighlight = true
+        let rendered = element(context)
+        let nested = KeyboardLikeViewController(view: rendered.element)
+        nested.modalPresentationStyle = .overFullScreen
         cell.didSelect = {
             context.pushViewController(nested)
         }
